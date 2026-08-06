@@ -204,8 +204,8 @@ div[data-testid="stTabs"] {{ background: rgba(255, 255, 255, 0.05); backdrop-fil
         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-top: -1px;"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
         Data Intel PRO 보안 접속
     </div>
-    <h1 style="font-size: 32px; font-weight: 800; line-height: 1.2; margin-bottom: 8px; color: white; letter-spacing: -1px;">현장 지도/방문<br>관제 시스템</h1>
-    <p style="font-size: 14px; color: #94a3b8; line-height: 1.5;">2Q 유지이탈 관리 데이터를 안전하게 보호합니다.<br>현장직원은 본인 구역을 선택하고, 관리자는 비밀번호를 입력하세요.</p>
+    <h1 style="font-size: 32px; font-weight: 800; line-height: 1.2; margin-bottom: 8px; color: {t['text']}; letter-spacing: -1px;">현장 지도/방문<br>관제 시스템</h1>
+    <p style="font-size: 14px; color: {t['text_muted']}; line-height: 1.5;">2Q 유지이탈 관리 데이터를 안전하게 보호합니다.<br>현장직원은 본인 구역을 선택하고, 관리자는 비밀번호를 입력하세요.</p>
 </div>
     """, unsafe_allow_html=True)
     
@@ -434,13 +434,13 @@ if df is not None:
     with col2:
         visit_cnt = len(df[df['status'].isin(['방문상담', '방문활동(표지판교체)'])])
         visit_label = '방문활동(표지판교체)' if len(df) > 0 and all(df['target_type'].isin(['SE', 'SG'])) else '방문상담'
-        st.markdown(f"<div class='metric-card'><div class='metric-label'>{visit_label}</div><div class='metric-value' style='color:{t[\"accent\"]};'>{visit_cnt}</div></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-card'><div class='metric-label'>{visit_label}</div><div class='metric-value' style='color:{t['accent']};'>{visit_cnt}</div></div>", unsafe_allow_html=True)
     with col3:
         renewal_cnt = len(df[df['status'] == '재계약'])
-        st.markdown(f"<div class='metric-card'><div class='metric-label'>재계약</div><div class='metric-value' style='color:{t[\"accent\"]};'>{renewal_cnt}</div></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-card'><div class='metric-label'>재계약</div><div class='metric-value' style='color:{t['accent']};'>{renewal_cnt}</div></div>", unsafe_allow_html=True)
     with col4:
         no_act_cnt = len(df[df['activity_status'] == '미접수'])
-        st.markdown(f"<div class='metric-card'><div class='metric-label'>미활동</div><div class='metric-value' style='color:{t[\"text_muted\"]};'>{no_act_cnt}</div></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-card'><div class='metric-label'>미활동</div><div class='metric-value' style='color:{t['text_muted']};'>{no_act_cnt}</div></div>", unsafe_allow_html=True)
         
     st.markdown("<br>", unsafe_allow_html=True)
     
