@@ -7,7 +7,7 @@ import plotly.graph_objects as go
 import io
 import os
 import re
-from core.data_handler import load_data, update_activity, log_login
+from core.data_handler import load_data, update_activity, log_login, backup_to_github
 from core.map_generator import create_map, create_route_map, export_map_to_html
 
 # --- Page Config ---
@@ -208,6 +208,20 @@ BRANCH_ADMIN_PASSWORDS = {
 }
 LOGIN_LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'login_log.csv')
 
+def try_backup_to_github(file_path, repo_path, commit_message):
+    """Best-effort GitHub backup so login/activity history survives a
+    Streamlit Cloud redeploy or reboot. No-ops quietly if GITHUB_TOKEN /
+    GITHUB_REPO aren't configured in st.secrets yet (e.g. running locally
+    or before the admin sets them up)."""
+    try:
+        token = st.secrets.get("GITHUB_TOKEN")
+        repo = st.secrets.get("GITHUB_REPO")
+    except Exception:
+        token, repo = None, None
+    if not token or not repo:
+        return False
+    return backup_to_github(file_path, repo_path, token, repo, commit_message)
+
 # --- Login Screen ---
 if not st.session_state.logged_in:
     st.markdown(f"""
@@ -290,6 +304,7 @@ div[data-testid="stTabs"] {{ background: rgba(255, 255, 255, 0.05); backdrop-fil
                         'zone': l_zone
                     }
                     log_login(LOGIN_LOG_PATH, '현장직원', branch=l_branch, target_type=l_type, zone=l_zone)
+                    try_backup_to_github(LOGIN_LOG_PATH, 'login_log.csv', f'Login: 현장직원 {l_branch}/{l_type}/{l_zone}')
                     st.rerun()
                     
         with tab2:
@@ -308,6 +323,7 @@ div[data-testid="stTabs"] {{ background: rgba(255, 255, 255, 0.05); backdrop-fil
                     st.session_state.admin_branch = None if is_master else admin_scope
                     login_type = '마스터관리자' if is_master else '지사관리자'
                     log_login(LOGIN_LOG_PATH, login_type, branch=('전체' if is_master else admin_scope))
+                    try_backup_to_github(LOGIN_LOG_PATH, 'login_log.csv', f'Login: {login_type} {admin_scope}')
                     st.rerun()
                 else:
                     st.error("비밀번호가 일치하지 않습니다.")
@@ -701,6 +717,7 @@ if df is not None:
                                 ok = update_activity(db_path, int(target_row['_row_id']), q_status, q_detail, modifier)
                                 if ok:
                                     st.success(f"'{target_row['name']}' 상태가 '{q_status}'(으)로 저장되었습니다.")
+                                    try_backup_to_github(db_path, 'db.csv', f'Activity update: {target_row["name"]} -> {q_status}')
                                     st.session_state.pop('map_clicked_tooltip', None)
                                     load_and_set_data()
                                     st.rerun()
@@ -967,6 +984,7 @@ if df is not None:
                     ok = update_activity(db_path, int(target_row['_row_id']), new_status, new_detail, modifier)
                     if ok:
                         st.success(f"'{target_row['name']}' 상태가 '{new_status}'(으)로 저장되었습니다.")
+                        try_backup_to_github(db_path, 'db.csv', f'Activity update: {target_row["name"]} -> {new_status}')
                         load_and_set_data()
                         st.rerun()
                     else:
@@ -995,15 +1013,52 @@ if df is not None:
             </div>
             """, unsafe_allow_html=True)
 
+            try:
+                backup_ready = bool(st.secrets.get("GITHUB_TOKEN")) and bool(st.secrets.get("GITHUB_REPO"))
+            except Exception:
+                backup_ready = False
+            bcol1, bcol2 = st.columns([3, 1])
+            with bcol1:
+                if backup_ready:
+                    st.caption("✅ GitHub 자동 백업 활성화됨 — 저장할 때마다 원격 저장소에 커밋됩니다.")
+                else:
+                    st.caption("⚠️ GitHub 자동 백업 미설정 — Streamlit Cloud 재배포/재부팅 시 이 로그가 사라질 수 있습니다. Secrets에 GITHUB_TOKEN/GITHUB_REPO를 등록해주세요.")
+            with bcol2:
+                if st.button("🔄 지금 백업", use_container_width=True, key="loginlog_manual_backup", disabled=not backup_ready):
+                    ok = try_backup_to_github(LOGIN_LOG_PATH, 'login_log.csv', '수동 백업: 로그인 이력')
+                    st.toast("백업 완료" if ok else "백업 실패", icon="✅" if ok else "⚠️")
+
             if not os.path.exists(LOGIN_LOG_PATH):
                 st.caption("아직 기록된 로그인 이력이 없습니다.")
             else:
                 log_df = pd.read_csv(LOGIN_LOG_PATH, encoding='utf-8-sig')
                 log_df = log_df.sort_values('로그인시각', ascending=False).reset_index(drop=True)
+                log_df['_dt'] = pd.to_datetime(log_df['로그인시각'], errors='coerce')
 
-                type_options = ["전체"] + sorted(log_df['유형'].dropna().unique().tolist())
-                selected_log_type = st.selectbox("유형 필터", type_options, key="loginlog_type_filter")
-                log_display = log_df if selected_log_type == "전체" else log_df[log_df['유형'] == selected_log_type]
+                fcol1, fcol2 = st.columns([1, 1])
+                with fcol1:
+                    type_options = ["전체"] + sorted(log_df['유형'].dropna().unique().tolist())
+                    selected_log_type = st.selectbox("유형 필터", type_options, key="loginlog_type_filter")
+                with fcol2:
+                    valid_dates = log_df['_dt'].dropna()
+                    if len(valid_dates) > 0:
+                        date_range = st.date_input(
+                            "기간 검색",
+                            value=(valid_dates.min().date(), valid_dates.max().date()),
+                            key="loginlog_date_filter"
+                        )
+                    else:
+                        date_range = None
+
+                log_display = log_df
+                if selected_log_type != "전체":
+                    log_display = log_display[log_display['유형'] == selected_log_type]
+                if isinstance(date_range, tuple) and len(date_range) == 2:
+                    start_date, end_date = date_range
+                    log_display = log_display[
+                        (log_display['_dt'].dt.date >= start_date) & (log_display['_dt'].dt.date <= end_date)
+                    ]
+                log_display = log_display.drop(columns=['_dt'])
 
                 lc1, lc2, lc3 = st.columns(3)
                 with lc1:
@@ -1016,9 +1071,9 @@ if df is not None:
                 st.dataframe(log_display, use_container_width=True, hide_index=True, height=450)
 
                 log_excel_buffer = io.BytesIO()
-                log_df.to_excel(log_excel_buffer, index=False, engine='openpyxl', sheet_name='로그인이력')
+                log_display.to_excel(log_excel_buffer, index=False, engine='openpyxl', sheet_name='로그인이력')
                 st.download_button(
-                    label="📥 로그인 이력 엑셀 다운로드",
+                    label="📥 로그인 이력 엑셀 다운로드 (검색결과)",
                     data=log_excel_buffer.getvalue(),
                     file_name="관리고객_로그인이력.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

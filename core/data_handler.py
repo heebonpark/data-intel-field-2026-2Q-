@@ -194,3 +194,37 @@ def log_login(log_path, login_type, branch='-', target_type='-', zone='-'):
         return True
     except Exception:
         return False
+
+
+def backup_to_github(file_path, repo_path, token, repo, commit_message):
+    """Push a local file (login_log.csv, db.csv, ...) to GitHub as a backup.
+
+    Streamlit Cloud's local disk resets on every redeploy/reboot/sleep, so
+    this is what actually makes the data durable. Credentials are passed in
+    (read from st.secrets by the caller) rather than imported here, so this
+    module stays free of any Streamlit dependency. No-ops safely if token
+    or repo is missing, so the app keeps working before secrets are set up.
+    """
+    if not token or not repo:
+        return False
+    try:
+        import requests
+        import base64
+
+        with open(file_path, 'rb') as f:
+            content_b64 = base64.b64encode(f.read()).decode('utf-8')
+
+        api_url = f"https://api.github.com/repos/{repo}/contents/{repo_path}"
+        headers = {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"}
+
+        get_resp = requests.get(api_url, headers=headers, timeout=10)
+        sha = get_resp.json().get('sha') if get_resp.status_code == 200 else None
+
+        payload = {"message": commit_message, "content": content_b64}
+        if sha:
+            payload["sha"] = sha
+
+        put_resp = requests.put(api_url, headers=headers, json=payload, timeout=10)
+        return put_resp.status_code in (200, 201)
+    except Exception:
+        return False

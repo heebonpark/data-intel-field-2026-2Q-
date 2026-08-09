@@ -15,6 +15,9 @@ venv.bak/
 # Environment variables
 .env.local
 
+# Streamlit secrets (GitHub backup token etc.) - never commit
+.streamlit/secrets.toml
+
 # OS generated files
 .DS_Store
 .DS_Store?
