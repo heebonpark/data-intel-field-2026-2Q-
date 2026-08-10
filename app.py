@@ -519,11 +519,8 @@ if df is not None:
         
     st.markdown("<br>", unsafe_allow_html=True)
     
-    if st.session_state.role == 'admin' and st.session_state.admin_branch is None:
+    if st.session_state.role == 'admin':
         tab_summary, tab_map, tab_dashboard, tab_register, tab_loginlog = st.tabs(["📈 요약 대시보드", "🗺️ 스마트 현장 지도", "📊 종합 활동 대시보드", "✏️ 활동이력 등록", "🔐 로그인 이력"])
-    elif st.session_state.role == 'admin':
-        tab_summary, tab_map, tab_dashboard, tab_register = st.tabs(["📈 요약 대시보드", "🗺️ 스마트 현장 지도", "📊 종합 활동 대시보드", "✏️ 활동이력 등록"])
-        tab_loginlog = None
     else:
         tab_map, tab_register = st.tabs(["🗺️ 스마트 현장 지도", "✏️ 활동이력 등록"])
         tab_summary = None
@@ -1005,10 +1002,11 @@ if df is not None:
 
     if tab_loginlog is not None:
         with tab_loginlog:
-            st.markdown("""
+            loginlog_scope_label = f"{st.session_state.admin_branch} 지사 관리자 전용" if st.session_state.admin_branch else "마스터 관리자 전용"
+            st.markdown(f"""
             <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px; padding: 10px 15px; background: rgba(56, 189, 248, 0.05); border-radius: 12px; border: 1px solid rgba(56, 189, 248, 0.2);">
                 <h3 style="margin: 0; font-size: 16px; display: flex; align-items: center; gap: 8px;">
-                    <span style="font-size: 20px;">🔐</span> 로그인 이력 (마스터 관리자 전용)
+                    <span style="font-size: 20px;">🔐</span> 로그인 이력 ({loginlog_scope_label})
                 </h3>
             </div>
             """, unsafe_allow_html=True)
@@ -1032,6 +1030,10 @@ if df is not None:
                 st.caption("아직 기록된 로그인 이력이 없습니다.")
             else:
                 log_df = pd.read_csv(LOGIN_LOG_PATH, encoding='utf-8-sig')
+                if st.session_state.admin_branch:
+                    # Branch admins only see login activity tied to their own branch
+                    # (their own logins plus field staff logging in under that branch).
+                    log_df = log_df[log_df['지사'] == st.session_state.admin_branch]
                 log_df = log_df.sort_values('로그인시각', ascending=False).reset_index(drop=True)
                 log_df['_dt'] = pd.to_datetime(log_df['로그인시각'], errors='coerce')
 
