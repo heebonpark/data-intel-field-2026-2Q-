@@ -1077,6 +1077,43 @@ if df is not None:
                 with lc3:
                     st.metric("관리자 로그인", int(log_df['유형'].isin(['마스터관리자', '지사관리자']).sum()))
 
+                # Branch breakdown chart - respects the date range but not the
+                # 유형 필터, since the whole point is to see the type mix per branch.
+                chart_source = log_df
+                if isinstance(date_range, tuple) and len(date_range) == 2:
+                    start_date, end_date = date_range
+                    chart_source = chart_source[
+                        (chart_source['_dt'].dt.date >= start_date) & (chart_source['_dt'].dt.date <= end_date)
+                    ]
+                if len(chart_source) > 0:
+                    branch_summary = chart_source.groupby(['지사', '유형']).size().reset_index(name='건수')
+                    branch_order_dict = {b: i for i, b in enumerate(branch_order)}
+                    branch_summary['_order'] = branch_summary['지사'].map(lambda x: branch_order_dict.get(x, 99))
+                    branch_summary = branch_summary.sort_values('_order')
+
+                    login_type_colors = {'현장직원': '#38bdf8', '지사관리자': '#f59e0b', '마스터관리자': '#a855f7'}
+                    fig_login_branch = px.bar(
+                        branch_summary,
+                        x='지사',
+                        y='건수',
+                        color='유형',
+                        barmode='group',
+                        color_discrete_map=login_type_colors,
+                        labels={'지사': '지사', '건수': '로그인 건수'}
+                    )
+                    fig_login_branch.update_layout(
+                        plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                        font=dict(family="Pretendard", color=t['text']),
+                        height=320,
+                        margin=dict(l=20, r=20, t=30, b=20),
+                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                    )
+                    fig_login_branch.update_yaxes(gridcolor='rgba(255,255,255,0.1)', title='')
+                    fig_login_branch.update_xaxes(title='')
+
+                    st.markdown(f"<p style='font-size: 13px; color: {t['text_muted']}; margin: 10px 0 5px;'>📊 지사별 로그인 현황 (선택한 기간 기준)</p>", unsafe_allow_html=True)
+                    st.plotly_chart(fig_login_branch, use_container_width=True)
+
                 st.dataframe(log_display, use_container_width=True, hide_index=True, height=450)
 
                 log_excel_buffer = io.BytesIO()
