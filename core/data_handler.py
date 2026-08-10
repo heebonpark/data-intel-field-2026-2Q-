@@ -204,12 +204,19 @@ def backup_to_github(file_path, repo_path, token, repo, commit_message):
     (read from st.secrets by the caller) rather than imported here, so this
     module stays free of any Streamlit dependency. No-ops safely if token
     or repo is missing, so the app keeps working before secrets are set up.
+
+    Returns (success, message) - message carries the actual failure reason
+    (HTTP status + GitHub's error body, or the exception) instead of
+    swallowing it, since "백업 실패" with no detail is undiagnosable.
     """
     if not token or not repo:
-        return False
+        return False, "GITHUB_TOKEN 또는 GITHUB_REPO가 설정되지 않았습니다."
     try:
         import requests
         import base64
+
+        if not os.path.exists(file_path):
+            return False, f"백업할 로컬 파일이 없습니다: {file_path}"
 
         with open(file_path, 'rb') as f:
             content_b64 = base64.b64encode(f.read()).decode('utf-8')
@@ -219,12 +226,16 @@ def backup_to_github(file_path, repo_path, token, repo, commit_message):
 
         get_resp = requests.get(api_url, headers=headers, timeout=10)
         sha = get_resp.json().get('sha') if get_resp.status_code == 200 else None
+        if get_resp.status_code not in (200, 404):
+            return False, f"GET 실패 (HTTP {get_resp.status_code}): {get_resp.text[:300]}"
 
         payload = {"message": commit_message, "content": content_b64}
         if sha:
             payload["sha"] = sha
 
         put_resp = requests.put(api_url, headers=headers, json=payload, timeout=10)
-        return put_resp.status_code in (200, 201)
-    except Exception:
-        return False
+        if put_resp.status_code in (200, 201):
+            return True, "OK"
+        return False, f"PUT 실패 (HTTP {put_resp.status_code}): {put_resp.text[:300]}"
+    except Exception as e:
+        return False, f"예외 발생: {e}"

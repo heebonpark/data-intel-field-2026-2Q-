@@ -209,17 +209,17 @@ BRANCH_ADMIN_PASSWORDS = {
 LOGIN_LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'login_log.csv')
 
 def try_backup_to_github(file_path, repo_path, commit_message):
-    """Best-effort GitHub backup so login/activity history survives a
-    Streamlit Cloud redeploy or reboot. No-ops quietly if GITHUB_TOKEN /
-    GITHUB_REPO aren't configured in st.secrets yet (e.g. running locally
-    or before the admin sets them up)."""
+    """GitHub backup so login/activity history survives a Streamlit Cloud
+    redeploy or reboot. Returns (ok, message) - message explains why it
+    failed (missing secrets, bad token, wrong repo, ...) instead of
+    swallowing the reason, since a silent failure is exactly how data got
+    lost before. Not configuring secrets yet is expected pre-setup, so
+    that case returns a message without raising."""
     try:
         token = st.secrets.get("GITHUB_TOKEN")
         repo = st.secrets.get("GITHUB_REPO")
     except Exception:
         token, repo = None, None
-    if not token or not repo:
-        return False
     return backup_to_github(file_path, repo_path, token, repo, commit_message)
 
 # --- Login Screen ---
@@ -714,7 +714,9 @@ if df is not None:
                                 ok = update_activity(db_path, int(target_row['_row_id']), q_status, q_detail, modifier)
                                 if ok:
                                     st.success(f"'{target_row['name']}' 상태가 '{q_status}'(으)로 저장되었습니다.")
-                                    try_backup_to_github(db_path, 'db.csv', f'Activity update: {target_row["name"]} -> {q_status}')
+                                    backup_ok, backup_msg = try_backup_to_github(db_path, 'db.csv', f'Activity update: {target_row["name"]} -> {q_status}')
+                                    if not backup_ok:
+                                        st.toast(f"⚠️ GitHub 백업 실패: {backup_msg}", icon="⚠️")
                                     st.session_state.pop('map_clicked_tooltip', None)
                                     load_and_set_data()
                                     st.rerun()
@@ -981,7 +983,9 @@ if df is not None:
                     ok = update_activity(db_path, int(target_row['_row_id']), new_status, new_detail, modifier)
                     if ok:
                         st.success(f"'{target_row['name']}' 상태가 '{new_status}'(으)로 저장되었습니다.")
-                        try_backup_to_github(db_path, 'db.csv', f'Activity update: {target_row["name"]} -> {new_status}')
+                        backup_ok, backup_msg = try_backup_to_github(db_path, 'db.csv', f'Activity update: {target_row["name"]} -> {new_status}')
+                        if not backup_ok:
+                            st.toast(f"⚠️ GitHub 백업 실패: {backup_msg}", icon="⚠️")
                         load_and_set_data()
                         st.rerun()
                     else:
@@ -1023,8 +1027,11 @@ if df is not None:
                     st.caption("⚠️ GitHub 자동 백업 미설정 — Streamlit Cloud 재배포/재부팅 시 이 로그가 사라질 수 있습니다. Secrets에 GITHUB_TOKEN/GITHUB_REPO를 등록해주세요.")
             with bcol2:
                 if st.button("🔄 지금 백업", use_container_width=True, key="loginlog_manual_backup", disabled=not backup_ready):
-                    ok = try_backup_to_github(LOGIN_LOG_PATH, 'login_log.csv', '수동 백업: 로그인 이력')
-                    st.toast("백업 완료" if ok else "백업 실패", icon="✅" if ok else "⚠️")
+                    ok, msg = try_backup_to_github(LOGIN_LOG_PATH, 'login_log.csv', '수동 백업: 로그인 이력')
+                    if ok:
+                        st.toast("백업 완료", icon="✅")
+                    else:
+                        st.error(f"백업 실패: {msg}")
 
             if not os.path.exists(LOGIN_LOG_PATH):
                 st.caption("아직 기록된 로그인 이력이 없습니다.")
