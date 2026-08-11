@@ -503,17 +503,20 @@ if df is not None:
             raw_status = selected_status.split(" ", 1)[1]
             df = df[df['status'] == raw_status]
         
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
     with col1:
         st.markdown(f"<div class='metric-card'><div class='metric-label'>활동대상</div><div class='metric-value'>{len(df)}</div></div>", unsafe_allow_html=True)
     with col2:
+        active_cnt = len(df[df['status'] == '활동중'])
+        st.markdown(f"<div class='metric-card'><div class='metric-label'>활동중</div><div class='metric-value' style='color:#f59e0b;'>{active_cnt}</div></div>", unsafe_allow_html=True)
+    with col3:
         visit_cnt = len(df[df['status'].isin(['방문상담', '방문활동(표지판교체)'])])
         visit_label = '방문활동(표지판교체)' if len(df) > 0 and all(df['target_type'].isin(['SE', 'SG'])) else '방문상담'
         st.markdown(f"<div class='metric-card'><div class='metric-label'>{visit_label}</div><div class='metric-value' style='color:{t['accent']};'>{visit_cnt}</div></div>", unsafe_allow_html=True)
-    with col3:
+    with col4:
         renewal_cnt = len(df[df['status'] == '재계약'])
         st.markdown(f"<div class='metric-card'><div class='metric-label'>재계약</div><div class='metric-value' style='color:{t['accent']};'>{renewal_cnt}</div></div>", unsafe_allow_html=True)
-    with col4:
+    with col5:
         no_act_cnt = len(df[df['activity_status'] == '미접수'])
         st.markdown(f"<div class='metric-card'><div class='metric-label'>미활동</div><div class='metric-value' style='color:{t['text_muted']};'>{no_act_cnt}</div></div>", unsafe_allow_html=True)
         
