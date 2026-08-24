@@ -1,4 +1,12 @@
 import streamlit as st
+
+st.warning("🚧 현재 서비스 점검 중입니다. 잠시 후 다시 이용해주세요.")
+st.stop()  # 이후 코드 실행 중단
+
+# --- 기존 앱 코드 ---
+
+
+import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 from streamlit_folium import st_folium
